@@ -27,11 +27,11 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  *
- * Copyright (c) 2011-2014 Almende B.V.
+ * Copyright (c) 2011-2015 Almende B.V.
  *
  * @author  Jos de Jong, <jos@almende.org>
- * @date    2014-07-28
- * @version 2.9.0
+ * @date    2015-03-04
+ * @version 2.9.1
  */
 
 /*
@@ -230,11 +230,6 @@ links.Timeline = function(container, options) {
         'NEW': "New",
         'CREATE_NEW_EVENT': "Create new event"
     };
-    
-    //
-    // Now we can set the givenproperties
-    //
-    this.setOptions(options);
 
     this.clientTimeOffset = 0;    // difference between client time and the time
     // set via Timeline.setCurrentTime()
@@ -262,6 +257,9 @@ links.Timeline = function(container, options) {
 
     // date interval must be initialized
     this.setVisibleChartRange(undefined, undefined, false);
+
+    // apply provided options
+    this.setOptions(options);
 
     // render for the first time
     this.render();

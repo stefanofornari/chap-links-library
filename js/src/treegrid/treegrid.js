@@ -27,11 +27,11 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  *
- * Copyright (c) 2011-2012 Almende B.V.
+ * Copyright (c) 2011-2015 Almende B.V.
  *
  * @author   Jos de Jong, <jos@almende.org>
- * @date    2012-07-03
- * @version 1.2.0
+ * @date     2015-11-20
+ * @version  1.8.0
  */
 
 /*
@@ -197,6 +197,56 @@ links.TreeGrid.prototype.redraw = function() {
     if (this.frame) {
         this.frame.onRangeChange();
     }
+};
+
+/**
+ * Expand one or multiple items
+ * @param {Object | Object[]} items     A single object or an array with
+ *                                      multiple objects
+ */
+links.TreeGrid.prototype.expand = function(items) {
+    if (!links.TreeGrid.isArray(items)) {
+        items = [items];
+    }
+
+    for (var i = 0; i < items.length; i++) {
+        var itemData = items[i];
+        var item = this.frame.findItem(itemData);
+        item && item.expand();
+    }
+};
+
+/**
+ * Collapse one or multiple items
+ * @param {Object | Object[]} items     A single object or an array with
+ *                                      multiple objects
+ */
+links.TreeGrid.prototype.collapse = function(items) {
+    if (!links.TreeGrid.isArray(items)) {
+        items = [items];
+    }
+
+    for (var i = 0; i < items.length; i++) {
+        var itemData = items[i];
+        var item = this.frame.findItem(itemData);
+        item && item.collapse();
+    }
+};
+
+/**
+ * Get the selected items
+ * @return {Array[]} selected items
+ */
+links.TreeGrid.prototype.getSelection = function() {
+    return this.frame.getSelection();
+};
+
+/**
+ * Set the selected items
+ * @param {Array[] | Object} items   a single item or array with items
+ */
+links.TreeGrid.prototype.setSelection = function(items) {
+    this.frame.setSelection(items);
 };
 
 /**
@@ -430,6 +480,59 @@ links.TreeGrid.Node.prototype.onResize = function() {
     }
 };
 
+/**
+ * Generate HTML Dom with action icons
+ * @param {links.TreeGrid.Node} node
+ * @param {Array} actions
+ * @returns {HTMLElement}
+ */
+links.TreeGrid.Node.createActionIcons = function (node, actions) {
+    var domActions = document.createElement('DIV');
+    var domAction;
+    domActions.style.position = 'absolute';
+    domActions.className = 'treegrid-actions';
+    domActions.style.top = 0 + 'px';
+    domActions.style.right = 24 + 'px';  // reckon with width of the scrollbar
+    for (var i = 0, iMax = actions.length; i < iMax; i++) {
+        var action = actions[i];
+        if (action.event) {
+            if (action.image) {
+                // create an image button
+                domAction = document.createElement('INPUT');
+                domAction.treeGridType = 'action';
+                domAction.type = 'image';
+                domAction.className = 'treegrid-action-image';
+                domAction.title = action.title || '';
+                domAction.src = action.image;
+                domAction.event = action.event;
+                domAction.id = action.id;
+                domAction.item = node;
+                domAction.style.width = action.width || '';
+                domAction.style.height = action.height || '';
+                domActions.appendChild(domAction);
+            }
+            else {
+                // create a text link
+                domAction = document.createElement('A');
+                domAction.treeGridType = 'action';
+                domAction.className = 'treegrid-action-link';
+                domAction.href = '#';
+                domAction.title = action.title || '';
+                domAction.innerHTML = action.text ? action.text : action.event;
+                domAction.event = action.event;
+                domAction.id = action.id;
+                domAction.item = node;
+                domAction.style.width = action.width || '';
+                domAction.style.height = action.height || '';
+                domActions.appendChild(domAction);
+            }
+        }
+        else {
+            // TODO: throw warning?
+        }
+    }
+    return domActions;
+};
 
 /**
  * The Frame is the base for a TreeGrid, it creates a DOM container and creates
@@ -458,11 +561,25 @@ links.TreeGrid.Frame = function (container, options) {
         'width': 0
     };
 
+    this.hoveredItem = null;
+
     // create the HTML DOM
     this.repaint();
 };
 
 links.TreeGrid.Frame.prototype = new links.TreeGrid.Node();
+
+/**
+ * Find an Item by its data
+ * @param {Object} itemData
+ * @return {links.TreeGrid.Item | null}
+ */
+links.TreeGrid.Frame.prototype.findItem = function (itemData) {
+    if (this.grid) {
+        return this.grid.findItem(itemData);
+    }
+    return null;
+};
 
 /**
  * Trigger an event, but do this via the treegrid object
@@ -477,6 +594,21 @@ links.TreeGrid.Frame.prototype.trigger = function(event, params) {
         throw 'Error: cannot trigger an event because treegrid is missing';
     }
 };
+
+/**
+ * Find the root node, a Frame, from a Grid or Item node.
+ * @param {links.TreeGrid.Item} node
+ * @returns {links.TreeGrid.Frame | null}
+ */
+links.TreeGrid.Frame.findFrame = function (node) {
+    while (node) {
+        if (node instanceof links.TreeGrid.Frame) {
+            return node;
+        }
+        node = node.parent;
+    }
+    return null;
+}
 
 /**
  * Get the HTML DOM container of the Frame
@@ -694,22 +826,27 @@ links.TreeGrid.Frame.prototype._repaintFrame = function() {
         //mainFrame.style.overflow = 'visible'; // TODO: cleanup
         mainFrame.style.left = '0px';
         mainFrame.style.top = '0px';
+        mainFrame.frame = this;
 
         this.container.appendChild(mainFrame);
         dom.mainFrame = mainFrame;
 
-        links.TreeGrid.addEventListener(mainFrame, 'mousedown',
-            function (event) {
-                frame.onMouseDown(event);
-            });
-        links.TreeGrid.addEventListener(mainFrame, 'mousewheel',
-            function (event) {
-                frame.onMouseWheel(event);
-            });
-        links.TreeGrid.addEventListener(mainFrame, 'touchstart',
-            function (event) {
-                frame.onTouchStart(event);
-            });
+        links.TreeGrid.addEventListener(mainFrame, 'mousedown', function (event) {
+            frame.onMouseDown(event);
+        });
+        links.TreeGrid.addEventListener(mainFrame, 'mouseover', function (event) {
+            frame.onMouseOver(event);
+        });
+        links.TreeGrid.addEventListener(mainFrame, 'mouseleave', function (event) {
+            // this is mouseleave on purpose, must not be mouseout
+            frame.onMouseLeave(event);
+        });
+        links.TreeGrid.addEventListener(mainFrame, 'mousewheel', function (event) {
+            frame.onMouseWheel(event);
+        });
+        links.TreeGrid.addEventListener(mainFrame, 'touchstart', function (event) {
+            frame.onTouchStart(event);
+        });
 
         var dragImage = document.createElement('div');
         dragImage.innerHTML = '1 item';
@@ -720,8 +857,8 @@ links.TreeGrid.Frame.prototype._repaintFrame = function() {
             'dragImage': dragImage,
             'dragImageOffsetX': 10,
             'dragImageOffsetY': -10,
-            'dragStart': function (event) {return frame.onDragStart(event);},
-            'dragEnd': function (event) {return frame.onDragEnd(event);}
+            'dragStart': function (event) {return frame.onDragStart(event);}
+            //'dragEnd': function (event) {return frame.onDragEnd(event);} // TODO: cleanup
         });
     }
 
@@ -848,7 +985,6 @@ links.TreeGrid.Grid = function (data, options) {
 
 links.TreeGrid.Grid.prototype = new links.TreeGrid.Node();
 
-
 /**
  * update the data: update items in the visible range, and update the item count
  */
@@ -927,29 +1063,101 @@ links.TreeGrid.Grid.prototype.updateHeight = function (child, diffHeight) {
  * Event handler for drop event
  */
 links.TreeGrid.Grid.prototype.onDrop = function(event) {
-    var data = JSON.parse(event.dataTransfer.getData('text'));
-
     // TODO: trigger event?
+    var items = event.dataTransfer.getData('items');
 
     if (this.dataConnector) {
         var me = this;
-        var callback = function () {
+        var callback = function (resp) {
             /* TODO
              if (me.expanded) {      
              me.onResize();
              }
              else {
-             me.onExpand();
+             me.expand();
              }*/
+
+            // set the returned items as accepted items
+            if (resp && resp.items) {
+                accepted = items.filter(function (item) {
+                    return resp.items.indexOf(item.data) !== -1;
+                });
+                event.dataTransfer.setData('items', accepted);
+            }
+            else {
+                accepted = items;
+            }
+
+            // update the selection
+            var frame = links.TreeGrid.Frame.findFrame(me);
+            if (frame && accepted.length > 0) {
+                // select the moved items
+                var first = me.items[startIndex];
+                frame.select(first);
+                if (accepted.length > 1) {
+                    var last = me.items[startIndex + accepted.length - 1];
+                    if (last) {
+                        frame.select(last, false, true);
+                    }
+                }
+            }
+
+            // fire the dragEnd event on the source frame
+            var srcFrame = event.dataTransfer.getData('srcFrame');
+            srcFrame.onDragEnd(event);
         };
         var errback = callback;
 
-        var items = [data.item];
-        if (event.dataTransfer.dropEffect == 'move') {
-            this.dataConnector.appendItems(items, callback, errback);
+        // prevent a circular loop, when an item is dropped on one of its own
+        // childs. So, remove items from which this item is a child
+        var i = 0;
+        while (i < items.length) {
+            var checkItem = this;
+            while (checkItem && checkItem != items[i]) {
+                checkItem = checkItem.parent;
+            }
+            if (checkItem == items[i]) {
+                items.splice(i, 1);
+            }
+            else {
+                i++;
+            }
         }
-        else if (event.dataTransfer.dropEffect == 'copy') {
-            this.dataConnector.appendItems(items, callback, errback);
+
+        var itemsData = [];
+        for (var i = 0; i < items.length; i++) {
+            itemsData.push(items[i].data);
+        }
+        if (event.dataTransfer.dropEffect == 'move' || event.dataTransfer.dropEffect == 'copy') {
+            var sameDataConnector = event.dropTarget &&
+                event.dragSource === event.dropTarget.parent ||
+                event.dragSource === event.dropTarget.grid;
+            event.dataTransfer.sameDataConnector = sameDataConnector;
+
+            if (this.dataConnector.insertItemsBefore !== links.DataConnector.prototype.insertItemsBefore) {
+                var item;
+                var beforeItem = null;
+                if (event.dropTarget instanceof links.TreeGrid.Item) {
+                    item = event.dropTarget;
+                    beforeItem = item.parent.items[item.index + 1];
+                }
+                else if (event.dropTarget instanceof links.TreeGrid.Header) {
+                    item = event.dropTarget;
+                    beforeItem = item.parent.items[0];
+                }
+                var beforeData = beforeItem && beforeItem.data;
+                var startIndex = beforeItem ? beforeItem.index : this.itemCount;
+
+                if (sameDataConnector) {
+                    this.dataConnector.moveItems(itemsData, beforeData, callback, errback);
+                }
+                else {
+                    this.dataConnector.insertItemsBefore(itemsData, beforeData, callback, errback);
+                }
+            }
+            else {
+                this.dataConnector.appendItems(itemsData, callback, errback);
+            }
         }
         /* TODO
          else if (event.dataTransfer.dropEffect == 'link') {
@@ -965,7 +1173,6 @@ links.TreeGrid.Grid.prototype.onDrop = function(event) {
 
     links.TreeGrid.preventDefault(event);
 };
-
 
 /**
  * merge two arrays
@@ -992,6 +1199,14 @@ links.TreeGrid.mergeArray = function(array1, array2) {
 links.TreeGrid.Grid.prototype.reflow = function() {
     var resized = false,
         visibleItems = this.visibleItems;
+
+    // check for changes in columns options
+    var latestColumns = this.dataConnector.getOptions().columns;
+    var columnsStr = JSON.stringify(latestColumns);
+    if (columnsStr != this.lastColumnsStr) {
+        this.setColumns(latestColumns);
+        this.lastColumnsStr = columnsStr;
+    }
 
     // preform a reflow on all childs (the header, visible items, expanded items)
     if (this.header) {
@@ -1020,7 +1235,7 @@ links.TreeGrid.Grid.prototype.reflow = function() {
         indentationWidth = this.options.indentationWidth;
     for (var i = 0, iMax = widths.length; i < iMax; i++) {
         var column = columns[i];
-        if (!column.fixedWidth) {
+        if (column && !column.fixedWidth) {
             var width = widths[i] + indentationWidth;
             if (width > column.width) {
                 column.width = width;
@@ -1037,7 +1252,7 @@ links.TreeGrid.Grid.prototype.reflow = function() {
         for (var j = 0, jMax = columns.length; j < jMax; j++) {
             var column = columns[j];
 
-            if (!column.fixedWidth) {
+            if (column && !column.fixedWidth) {
                 var width = widths[j] + indentationWidth;
                 if (width > column.width) {
                     column.width = width;
@@ -1065,7 +1280,10 @@ links.TreeGrid.Grid.prototype.reflow = function() {
     var left = indentationWidth + this.iconsWidth;
     for (var i = 0, iMax = columns.length; i < iMax; i++) {
         var column = columns[i];
-        column.left = left;
+        if (left != column.left) {
+            column.left = left;
+            resized = true;
+        }
         left += column.width;
     }
 
@@ -1505,7 +1723,7 @@ links.TreeGrid.Grid.prototype._removeItem = function (item) {
     var index = items.indexOf(item);
     if (index != -1) {
         if (item.expanded) {
-            item.onExpand();
+            item.collapse();
         }
 
         var visIndex = this.visibleItems.indexOf(item);
@@ -1518,6 +1736,11 @@ links.TreeGrid.Grid.prototype._removeItem = function (item) {
         item.hide();
         items.splice(index, 1);
         this.itemCount--;
+
+        // update index of all lower down items
+        for (var i = index, iMax = items.length; i < iMax; i++) {
+            items[i].index = i;
+        }
     }
 };
 
@@ -1717,7 +1940,7 @@ links.TreeGrid.Grid.prototype._updateItems = function (offset, limit, callback, 
         if (errback) {
             errback(err);
         }
-    }
+    };
 
     if (limit > 0 || this.totalItems === undefined) {
         //console.log('_updateItems offset=' + offset + ', limit=' + limit ); // TODO: cleanup
@@ -1746,10 +1969,6 @@ links.TreeGrid.Grid.prototype._repaintHeader = function () {
  * Redraw the items in the currently visible window
  */
 links.TreeGrid.Grid.prototype._repaintItems = function () {
-    var columns = this.columns,
-        windowTop = (this.window && this.window.top) ? this.window.top : 0,
-        visibleItems = this.visibleItems;
-
     // remove items which are outside the visible window
     var visible = this.isVisible(),
         visibleItems = this.visibleItems,
@@ -1758,11 +1977,8 @@ links.TreeGrid.Grid.prototype._repaintItems = function () {
         var item = visibleItems[i];
         if (item.index < this.offset || item.index >= this.offset + this.limit || !visible) {
             item.hide();
-            var index = visibleItems.indexOf(item);
-            if (index != -1) {
-                visibleItems.splice(index, 1);
-                i--;
-            }
+            visibleItems.splice(i, 1);
+            i--;
         }
         i++;
     }
@@ -1844,6 +2060,45 @@ links.TreeGrid.Grid.prototype._repaintDropAreas = function () {
     }
 };
 
+links.TreeGrid.Grid.prototype.expand = function (items) {
+    if (!links.TreeGrid.isArray(items)) {
+        items = [items];
+    }
+
+    for (var i = 0; i < items.length; i++) {
+        var itemsData = items[i];
+        var item = this.findItem(itemsData);
+        item && item.expand();
+    }
+};
+
+links.TreeGrid.Grid.prototype.collapse = function (items) {
+    if (!links.TreeGrid.isArray(items)) {
+        items = [items];
+    }
+
+    for (var i = 0; i < items.length; i++) {
+        var itemsData = items[i];
+        var item = this.findItem(itemsData);
+        item && item.collapse();
+    }
+};
+
+/**
+ * Find an Item by its data
+ * @param {Object} itemData
+ * @return {links.TreeGrid.Item | null}
+ */
+links.TreeGrid.Grid.prototype.findItem = function (itemData) {
+    for (var i = 0; i < this.items.length; i++) {
+        var found = this.items[i].findItem(itemData);
+        if (found) {
+            return found;
+        }
+    }
+    return null;
+};
+
 /**
  * @constructor links.TreeGrid.Header
  * @param {Object} params. A key-value map containing parameters:
@@ -1892,6 +2147,7 @@ links.TreeGrid.Header.prototype.repaint = function () {
         if (!domHeader) {
             // create the DOM
             domHeader = document.createElement('DIV');
+            domHeader.header = this;
             domHeader.treeGridType = 'header';
             domHeader.className = 'treegrid-header';
             domHeader.style.position = 'absolute';
@@ -1902,13 +2158,12 @@ links.TreeGrid.Header.prototype.repaint = function () {
 
             if (this.columns) {
                 // create fields
-                var columns = this.columns,
-                    padding = this.options.padding;
+                var padding = this.options.padding;
                 for (var i = 0, iMax = columns.length; i < iMax; i++) {
                     if (!this.dom.fields[i]) {
                         var column = this.columns[i];
                         var domField = document.createElement('DIV');
-                        domField.className = 'treegrid-header-field';
+                        domField.className = 'treegrid-header-field' + (column.sortable ? ' treegrid-sortable' : '');
                         domField.style.position = 'absolute';
                         domField.style.top = '0px';
                         domField.innerHTML = column.text || column.name || '';
@@ -1921,6 +2176,81 @@ links.TreeGrid.Header.prototype.repaint = function () {
             }
         }
 
+        // update actions
+        var actions = this.parent && this.parent.dataConnector && this.parent.dataConnector.actions;
+        if (JSON.stringify(actions) !== JSON.stringify(this.actions)) {
+            this.actions = actions;
+
+            if (this.dom.actions) {
+                var parent = this.dom.actions.parentNode;
+                parent && parent.removeChild(this.dom.actions);
+                delete this.dom.actions;
+            }
+
+            if (actions) {
+                var domActions = links.TreeGrid.Node.createActionIcons(this, actions);
+                this.dom.actions = domActions;
+                domHeader.appendChild(domActions);
+            }
+        }
+
+        // update filters (create sorting buttons
+        var filters = this.parent && this.parent.dataConnector && this.parent.dataConnector.filters;
+        if (!this.filters || JSON.stringify(filters) !== JSON.stringify(this.filters)) {
+            this.filters = filters;
+
+            var orderIcons = {
+                asc: '&blacktriangledown;',
+                desc: '&blacktriangle;',
+                'null': '&blacktriangle;&blacktriangledown;'
+            }
+
+            if (this.columns) {
+                for (var i = 0, iMax = columns.length; i < iMax; i++) {
+                    var column = this.columns[i];
+                    var domField = this.dom.fields[i];
+
+                    // remove old dom field
+                    if (domField.domSort) {
+                        domField.removeChild(domField.domSort);
+                        delete domField.domSort;
+                    }
+
+                    if (column.sortable) {
+                        // create new DOM field
+                        var dataConnector = this.parent.dataConnector;
+                        var entries = dataConnector.getSorting();
+                        var entry = null;
+                        if (entries) {
+                            for (var j = 0; j < entries.length; j++) {
+                                if (entries[j].field == column.name) {
+                                    entry = entries[j];
+                                    break;
+                                }
+                            }
+                        }
+
+                        var domSort = document.createElement('SPAN');
+                        var order = entry && entry.order;
+                        domSort.innerHTML = ' ' + orderIcons[entry && entry.order];
+                        domSort.title = 'Sort this column';
+                        domSort.className = 'treegrid-order';
+
+                        domField.appendChild(domSort);
+                        domField.domSort = domSort;
+                        (function (field, order) {
+                            domField.onclick = function () {
+                                dataConnector.setSorting([{
+                                    field: field,
+                                    order: (order === 'asc') ? 'desc' : (order === 'desc') ? null : 'asc'
+                                }]);
+                            }
+                        })(column.name, order)
+                    }
+                }
+            }
+        }
+
         // reposition the header
         var absTop = Math.max(this.getAbsTop(), 0);
         domHeader.style.top = absTop + 'px';
@@ -1928,20 +2258,15 @@ links.TreeGrid.Header.prototype.repaint = function () {
         domHeader.style.height = this.height + 'px';
         domHeader.style.width = this.width + 'px';
 
-        /* TODO: width of the header?
-         if (this.left) {
-         var lastColumn = this.columns[this.columns.length-1];
-         header.dom.style.width = lastColumn.left+ lastColumn.width + 'px';
-         }
-         else {
-         header.dom.style.width = '100%';
-         }*/
-
         // position the columns
         var domFields = this.dom.fields;
-        var columns = this.columns;
-        for (var i = 0, iMax = domFields.length; i < iMax; i++) {
-            domFields[i].style.left = columns[i].left + 'px';
+        for (var i = 0, iMax = Math.min(domFields.length, columns.length); i < iMax; i++) {
+            var col = columns[i];
+            domFields[i].style.left = col.left + 'px';
+
+            if (col && col.fixedWidth) {
+                domFields[i].style.width = col.width + 'px';
+            }
         }
     }
     else {
@@ -1982,6 +2307,10 @@ links.TreeGrid.Header.prototype.reflow = function () {
         // leave fieldsHeight as it is...
     }
 
+    // calculate the height of action icons (if any)
+    var domActions = this.dom && this.dom.actions;
+    var actionsHeight = domActions ? domActions.clientHeight : 0;
+
     /* TODO: needed for auto sizing with
      // calculate the width of the header
      var contentWidth = 0;
@@ -1995,8 +2324,7 @@ links.TreeGrid.Header.prototype.reflow = function () {
     this.width = this.getVisibleWindow().width - this.getAbsLeft();
 
     // calculate total height
-    var height = 0;
-    height += this.fieldsHeight;
+    var height = Math.max(this.fieldsHeight, actionsHeight);
 
     var diffHeight = (height - this.height);
     if  (diffHeight) {
@@ -2006,6 +2334,25 @@ links.TreeGrid.Header.prototype.reflow = function () {
     }
 
     return resized;
+};
+
+/**
+ * Handle a click on an action icon in a header
+ * @param {string} event
+ */
+links.TreeGrid.Header.prototype.onEvent = function (event) {
+    var dataConnector = this.parent.dataConnector; // TODO: not so nice accessing dataconnector like this
+    var params = {
+        dataConnector: dataConnector || null
+    };
+
+    // send the event to the treegrid
+    links.events.trigger(this.getTreeGrid(), event, params);
+
+    // send the event to the dataconnector
+    if (dataConnector) {
+        dataConnector._onEvent(event, params);
+    }
 };
 
 /**
@@ -2056,15 +2403,22 @@ links.TreeGrid.Grid.prototype.setItemCount = function (itemCount) {
     if (diff < 0) {
         // there are items removed
         var oldItemCount = this.itemCount;
-        var items = this.items;
+
+        // adjust the itemsHeight
         for (var i = itemCount; i < oldItemCount; i++) {
-            var item = items[i];
-            if (item) {
-                item.hide();
-                delete items[i];
-            }
+            var item = this.items[i];
             var itemHeight = item ? item.getHeight() : defaultHeight;
             this.itemsHeight -= (itemHeight + this.dropAreaHeight);
+        }
+
+        // remove all items at the tail
+        // important: loop until this.items.length, not oldItemCount
+        for (var i = oldItemCount; i < this.items.length; i++) {
+            var item = this.items[i];
+            if (item) {
+                item.hide();
+                delete this.items[i];
+            }
         }
 
         if (itemCount == 0) {
@@ -2201,6 +2555,23 @@ links.TreeGrid.Item = function (params) {
 };
 
 links.TreeGrid.Item.prototype = new links.TreeGrid.Node();
+
+/**
+ * Find an Item by its data
+ * @param {Object} itemData
+ * @return {links.TreeGrid.Item | null}
+ */
+links.TreeGrid.Item.prototype.findItem = function (itemData) {
+    if (this.data === itemData) {
+        return this;
+    }
+
+    if (this.grid) {
+        return this.grid.findItem(itemData);
+    }
+
+    return null;
+};
 
 /**
  * Evaluate given function with a custom current object
@@ -2396,14 +2767,61 @@ links.TreeGrid.Item.prototype.onEvent = function (event) {
 };
 
 /**
- * Expand or collapse the item
+ * Create grid if not yet instantiated
+ * @return {links.TreeGrid.Grid} Returns the created (or already existing) grid
+ * @private
  */
-links.TreeGrid.Item.prototype.onExpand = function () {
-    if (this.expanded) {
-        // collapse the item
-        this.dom.buttonExpand.className = 'treegrid-fold';
+links.TreeGrid.Item.prototype._createGrid = function () {
+    if (!this.grid) {
+        // create a grid for the child data
+        this.grid = new links.TreeGrid.Grid(this.dataConnector, this.options);
+        this.grid.setParent(this);
+        this.grid.setLeft(this.left + this.options.indentationWidth);
+        this.grid.setTop(this.height);
+    }
+    return this.grid;
+};
+
+/**
+ * Expand the item
+ */
+links.TreeGrid.Item.prototype.expand = function () {
+    if (this.expanded) return;
+
+    if (this.dataConnector) {
+        this.expanded = true;
+        this.parent.registerExpandedItem(this);
+
+        if (this.dom.buttonExpand) {
+            this.dom.buttonExpand.className = 'treegrid-unfold';
+        }
+
+        // create grid if not yet instantiated
+        this._createGrid();
+
+        // if grid was already loaded before, make it visible
+        this.setVisible(true);
+        this.grid.setVisible(true);
+        this.gridHeight += (this.grid.getHeight() + this.options.padding);
+
+        this.onEvent('expand');
+        this.onResize();
+    }
+};
+
+/**
+ * Collapse the item
+ */
+links.TreeGrid.Item.prototype.collapse = function () {
+    if (!this.expanded) return;
+
+    if (this.dataConnector) {
         this.expanded = false;
         this.parent.unregisterExpandedItem(this);
+
+        if (this.dom.buttonExpand) {
+            this.dom.buttonExpand.className = 'treegrid-fold';
+        }
 
         if (this.grid) {
             this.grid.setVisible(false);
@@ -2412,36 +2830,24 @@ links.TreeGrid.Item.prototype.onExpand = function () {
         }
 
         this.onEvent('collapse');
+        this.onResize();
     }
-    else {
-        // expand the item
-        this.dom.buttonExpand.className = 'treegrid-unfold';
-        this.expanded = true;
-        this.parent.registerExpandedItem(this);
-
-        if (this.dataConnector) {
-            if (!this.grid) {
-                // create a grid for the child data
-                this.grid = new links.TreeGrid.Grid(this.dataConnector, this.options);
-                this.grid.setParent(this);
-                this.grid.setLeft(this.left + this.options.indentationWidth);
-                this.grid.setTop(this.height);
-            }
-
-            // if grid was already loaded before, make it visible
-            this.grid.setVisible(true);
-
-            this.gridHeight += (this.grid.getHeight() + this.options.padding);
-        }
-
-        this.onEvent('expand');
-    }
-
-    this.onResize();
 };
 
 /**
- * Event handler for drag start event
+ * Toggle expand/collapse of the item
+ */
+links.TreeGrid.Item.prototype.toggleExpand = function () {
+    if (this.expanded) {
+        this.collapse();
+    }
+    else {
+        this.expand();
+    }
+};
+
+/**
+ * Event handler for drag over event
  */
 links.TreeGrid.Item.prototype.onDragOver = function(event) {
     if (this.dataTransfer.dragging) {
@@ -2513,21 +2919,31 @@ links.TreeGrid.Item.prototype.onDrop = function(event) {
     this.dataTransfer.dragbefore = false;
     this.repaint();
 
-    //console.log('onDrop', data, event.dataTransfer.dropEffect);
-
-    // TODO: trigger event
-
     if (this.dataConnector) {
         var me = this;
-        var callback = function () {
+        var callback = function (resp) {
             //* TODO
             if (me.expanded) {
                 me.onResize();
             }
             else {
-                me.onExpand();
+                me.expand();
             }
             //*/
+
+            // set the returned items as accepted items
+            if (resp && resp.items) {
+                accepted = event.dataTransfer.getData('items').filter(function (item) {
+                    return resp.items.indexOf(item.data) !== -1;
+                });
+                event.dataTransfer.setData('items', accepted);
+            }
+
+            // TODO: select the just dropped items
+
+            // fire the dragEnd event on the source frame
+            var srcFrame = event.dataTransfer.getData('srcFrame');
+            srcFrame.onDragEnd(event);
         };
         var errback = callback;
 
@@ -2851,9 +3267,7 @@ links.TreeGrid.Item.prototype._repaintFields = function() {
             // create the fields
             var domFields = [];
             this.dom.fields = domFields;
-            var padding = this.options.padding;
             var fields = this.fields;
-            var height = this.height;
             for (var i = 0, iMax = fields.length; i < iMax; i++) {
                 var field = fields[i];
 
@@ -2863,11 +3277,6 @@ links.TreeGrid.Item.prototype._repaintFields = function() {
                 //domField.style.position = 'relative';
                 domField.style.top = '0px';
 
-                var col = this.columns[i];
-                if (col.fixedWidth) {
-                    domField.style.width = col.width + 'px';
-                }
-
                 domField.innerHTML = field;
                 domFrame.appendChild(domField);
                 domFields.push(domField);
@@ -2875,46 +3284,8 @@ links.TreeGrid.Item.prototype._repaintFields = function() {
 
             // create the actions
             if (this.actions) {
-                var actions = this.actions;
-                var domActions = document.createElement('DIV');
+                var domActions = links.TreeGrid.Node.createActionIcons(this, this.actions);
                 this.dom.actions = domActions;
-                domActions.style.position = 'absolute';
-                domActions.className = 'treegrid-actions';
-                domActions.style.top = 0 + 'px';
-                domActions.style.right = 24 + 'px';  // reckon with width of the scrollbar      
-                for (var i = 0, iMax = actions.length; i < iMax; i++) {
-                    var action = actions[i];
-                    if (action.event) {
-                        if (action.image) {
-                            // create an image button
-                            var domAction = document.createElement('INPUT');
-                            domAction.treeGridType = 'action';
-                            domAction.type = 'image';
-                            domAction.className = 'treegrid-action-image';
-                            domAction.title = action.title || '';
-                            domAction.src = action.image;
-                            domAction.event = action.event;
-                            domAction.item = this;
-                            domActions.appendChild(domAction);
-                        }
-                        else {
-                            // create a text link
-                            var domAction = document.createElement('A');
-                            domAction.treeGridType = 'action';
-                            domAction.className = 'treegrid-action-link';
-                            domAction.href = '#';
-                            domAction.title = action.title || '';
-                            domAction.innerHTML = action.text ? action.text : action.event;
-                            domAction.event = action.event;
-                            domAction.item = this;
-                            domActions.appendChild(domAction);
-                        }
-                    }
-                    else {
-                        // TODO: throw warning?
-                    }
-                }
-
                 domFrame.appendChild(domActions);
             }
 
@@ -2974,8 +3345,9 @@ links.TreeGrid.Item.prototype._repaintFields = function() {
         }
 
         // position the frame
+        var left = this.getAbsLeft();
         domFrame.style.top = this.getAbsTop() + 'px';
-        domFrame.style.left = this.getAbsLeft() + 'px';
+        domFrame.style.left = left + 'px';
         // TODO
         //domFrame.style.top = 0 + 'px';
         //domFrame.style.left = 0 + 'px';
@@ -2996,6 +3368,10 @@ links.TreeGrid.Item.prototype._repaintFields = function() {
                 var domField = domFields[i];
                 if (domField) {
                     domField.style.left = col.left + 'px';
+
+                    if (col && col.fixedWidth) {
+                        domField.style.width = col.width + 'px';
+                    }
                 }
             }
         }
@@ -3007,6 +3383,8 @@ links.TreeGrid.Item.prototype._repaintFields = function() {
 
         // check the class name depending on the status
         var className = 'treegrid-item';
+        className += ((this.index % 2) ? ' treegrid-item-odd' : ' treegrid-item-even');
+        className += ' treegrid-level-' + (left / this.options.indentationWidth);
         if (this.selected || this.dataTransfer.dragging) {
             className += ' treegrid-item-selected';
         }
@@ -3296,11 +3674,9 @@ links.TreeGrid.DropArea.prototype.onDragLeave = function(event) {
  * Event handler for drop event
  */
 links.TreeGrid.DropArea.prototype.onDrop = function(event) {
-    var data = JSON.parse(event.dataTransfer.getData('text'));
+    var data = JSON.parse(event.dataTransfer.getData('items'));
     this.dragover = false;
     this.repaint();
-
-    //console.log('onDrop', event);
 
     if (this.dataConnector) {
         var me = this;
@@ -3625,6 +4001,7 @@ links.TreeGrid.VerticalScroll.prototype._callbackOnChangeHandlers = function() {
 links.DataConnector = function (options) {
     this.options = options || {};
     this.eventListeners = []; // registered event handlers
+    this.expanded = false;
 };
 
 /**
@@ -3664,8 +4041,7 @@ links.DataConnector.prototype.trigger = function (event, params) {
  * @param {function} errback  Callback method called on failure. Called with
  *                            an error message as parameter.
  */
-links.DataConnector.prototype.getChanges = function (index, num, items,
-                                                     callback, errback) {
+links.DataConnector.prototype.getChanges = function (index, num, items, callback, errback) {
     throw 'Error: method getChanges is not implemented';
 };
 
@@ -3717,14 +4093,16 @@ links.DataConnector.prototype.appendItems = function (items, callback, errback) 
 /**
  * Asynchronously insert a number of items.
  * The callback returns the inserted items, which may be newly instantiated objects .
- * @param {Object[]} items    A list with items to be inserted
- * @param {Object} beforeItem The items will be inserted before this item.
- * @param {function} callback Callback method called on success. Called with one
- *                            object as parameter, containing fields:
- *                              {Number} totalItems
- *                              {Array with Objects} items    The inserted items
- * @param {function} errback  Callback method called on failure. Called with
- *                            an error message as parameter.
+ * @param {Object[]} items      A list with items to be inserted
+ * @param {Object} [beforeItem] The items will be inserted before this item.
+ *                              When beforeItem is undefined, the items will be
+ *                              moved to the end of the data.
+ * @param {function} callback   Callback method called on success. Called with one
+ *                              object as parameter, containing fields:
+ *                                {Number} totalItems
+ *                                {Array with Objects} items    The inserted items
+ * @param {function} errback    Callback method called on failure. Called with
+ *                              an error message as parameter.
  */
 links.DataConnector.prototype.insertItemsBefore = function (items, beforeItem, callback, errback) {
     errback('Error: method insertItemsBefore is not implemented');
@@ -3733,16 +4111,16 @@ links.DataConnector.prototype.insertItemsBefore = function (items, beforeItem, c
 /**
  * Asynchronously move a number of items.
  * The callback returns the moved items, which may be newly instantiated objects .
- * @param {Object[]} items    A list with items to be moved
- * @param {Object} beforeItem The items will be inserted before this item.
- *                            When beforeItem is undefined, the items will be
- *                            moved to the end of the data.
- * @param {function} callback Callback method called on success. Called with one
- *                            object as parameter, containing fields:
- *                              {Number} totalItems
- *                              {Array with Objects} items    The moved items
- * @param {function} errback  Callback method called on failure. Called with
- *                            an error message as parameter.
+ * @param {Object[]} items      A list with items to be moved
+ * @param {Object} [beforeItem] The items will be inserted before this item.
+ *                              When beforeItem is undefined, the items will be
+ *                              moved to the end of the data.
+ * @param {function} callback   Callback method called on success. Called with one
+ *                              object as parameter, containing fields:
+ *                                {Number} totalItems
+ *                                {Array with Objects} items    The moved items
+ * @param {function} errback    Callback method called on failure. Called with
+ *                              an error message as parameter.
  */
 links.DataConnector.prototype.moveItems = function (items, beforeItem, callback, errback) {
     errback('Error: method moveItems is not implemented');
@@ -3790,7 +4168,6 @@ links.DataConnector.prototype._onEvent = function (event, params) {
     this.onEvent(event, params);
 };
 
-
 /**
  * onEvent handler
  * @param {String} event
@@ -3802,8 +4179,23 @@ links.DataConnector.prototype.onEvent = function (event, params) {
 };
 
 // TODO: comment
-links.DataConnector.prototype.setFilters = function (filters) {
-    errback('Error: method setFilters is not implemented');
+links.DataConnector.prototype.setFiltering = function (filters) {
+    console.log('Error: method setFiltering is not implemented');
+};
+
+// TODO: comment
+links.DataConnector.prototype.setSorting = function (sorting) {
+    console.log('Error: method setSorting is not implemented');
+};
+
+// TODO: comment
+links.DataConnector.prototype.getFiltering = function (filters) {
+    console.log('Error: method getFiltering is not implemented');
+};
+
+// TODO: comment
+links.DataConnector.prototype.getSorting = function (sorting) {
+    console.log('Error: method getSorting is not implemented');
 };
 
 /**
@@ -3848,6 +4240,7 @@ links.DataConnector.prototype.removeEventListener = function (callback) {
  */
 links.DataConnector.prototype.setOptions = function (options) {
     this.options = options || {};
+    this.trigger('change', undefined);
 };
 
 /**
@@ -3855,6 +4248,15 @@ links.DataConnector.prototype.setOptions = function (options) {
  */
 links.DataConnector.prototype.getOptions = function () {
     return this.options;
+};
+
+/**
+ * Set action icons
+ * @param {Array} actions
+ */
+links.DataConnector.prototype.setActions = function (actions) {
+    this.actions = actions;
+    this.trigger('change', undefined);
 };
 
 /**
@@ -3890,7 +4292,7 @@ links.DataTable.prototype.getItems = function (index, num, callback, errback) {
     for (var i = index, iMax = Math.min(index + num, count) ; i < iMax; i++) {
         items.push(filteredData[i]);
     }
-    callback({
+    callback && callback({
         'totalItems': filteredData.length,
         'items':      items
     });
@@ -3915,18 +4317,24 @@ links.DataTable.prototype.updateItems = function (items, callback, errback) {
         var item = items[i];
         var index = data.indexOf(item);
         if (index != -1) {
-            data[index] = item;
+            // clone the item, so we can distinguish changed items by their pointer
+            data[index] = {};
+            for (var prop in item) {
+                if (item.hasOwnProperty(prop)) {
+                    data[index][prop] = item[prop];
+                }
+            }
         }
         else {
-            errback("Cannot find item"); // TODO: better error
+            errback && errback("Cannot find item"); // TODO: better error
             return;
         }
     }
 
-    // perform filtering and sorting again if there is a filter set
-    this.updateFilters();
+    // perform filtering and sorting again
+    this._applySortingAndFilters();
 
-    callback({
+    callback && callback({
         'totalItems': this.filteredData.length,
         'items': items
     });
@@ -3951,10 +4359,10 @@ links.DataTable.prototype.appendItems = function (items, callback, errback) {
         this.data.push(items[i]);
     }
 
-    // perform filtering and sorting again if there is a filter set
-    this.updateFilters();
+    // perform filtering and sorting again
+    this._applySortingAndFilters();
 
-    callback({
+    callback && callback({
         'totalItems': this.filteredData.length,
         'items': items
     });
@@ -3965,34 +4373,33 @@ links.DataTable.prototype.appendItems = function (items, callback, errback) {
 /**
  * Asynchronously insert a number of items.
  * The callback returns the inserted items, which may be newly instantiated objects .
- * @param {Object[]} items    A list with items to be inserted
- * @param {Object} beforeItem The items will be inserted before this item.
- * @param {function} callback Callback method called on success. Called with one
- *                            object as parameter, containing fields:
- *                              {Number} totalItems
- *                              {Array with Objects} items    The inserted items
- * @param {function} errback  Callback method called on failure. Called with
- *                            an error message as parameter.
+ * @param {Object[]} items      A list with items to be inserted
+ * @param {Object} [beforeItem] The items will be inserted before this item.
+ *                              When beforeItem is undefined, the items will be
+ *                              moved to the end of the data.
+ * @param {function} callback   Callback method called on success. Called with one
+ *                              object as parameter, containing fields:
+ *                                {Number} totalItems
+ *                                {Array with Objects} items    The inserted items
+ * @param {function} errback    Callback method called on failure. Called with
+ *                              an error message as parameter.
  */
 links.DataTable.prototype.insertItemsBefore = function (items, beforeItem, callback, errback) {
     // find the item before which the new items will be inserted
     var data = this.data;
-    var beforeIndex = data.indexOf(beforeItem);
+    var beforeIndex = beforeItem ? data.indexOf(beforeItem) : data.length;
     if (beforeIndex == -1) {
-        errback("Cannot find item"); // TODO: better error
+        errback && errback("Cannot find item"); // TODO: better error
         return;
     }
 
     // insert the new data
-    var num = items.length;
-    for (var i = 0; i < num; i++) {
-        data.splice(beforeIndex + i, 0, items[i]);
-    }
+    data.splice.apply(data, [beforeIndex, 0].concat(items));
 
-    // perform filtering and sorting again if there is a filter set
-    this.updateFilters();
+    // perform filtering and sorting again
+    this._applySortingAndFilters();
 
-    callback({
+    callback && callback({
         'totalItems': this.filteredData.length,
         'items': items
     });
@@ -4004,22 +4411,22 @@ links.DataTable.prototype.insertItemsBefore = function (items, beforeItem, callb
 /**
  * Asynchronously move a number of items.
  * The callback returns the moved items, which may be newly instantiated objects .
- * @param {Object[]} items    A list with items to be moved
- * @param {Object} beforeItem The items will be inserted before this item.
- *                            When beforeItem is undefined, the items will be
- *                            moved to the end of the data.
- * @param {function} callback Callback method called on success. Called with one
- *                            object as parameter, containing fields:
- *                              {Number} totalItems
- *                              {Array with Objects} items    The moved items
- * @param {function} errback  Callback method called on failure. Called with
- *                            an error message as parameter.
+ * @param {Object[]} items      A list with items to be moved
+ * @param {Object} [beforeItem] The items will be inserted before this item.
+ *                              When beforeItem is undefined, the items will be
+ *                              moved to the end of the data.
+ * @param {function} callback   Callback method called on success. Called with one
+ *                              object as parameter, containing fields:
+ *                                {Number} totalItems
+ *                                {Array with Objects} items    The moved items
+ * @param {function} errback    Callback method called on failure. Called with
+ *                              an error message as parameter.
  */
 links.DataTable.prototype.moveItems = function (items, beforeItem, callback, errback) {
     // find the index of the before item
-    var beforeIndex = this.data.indexOf(beforeItem);
+    var beforeIndex = beforeItem ? this.data.indexOf(beforeItem) : this.data.length;
     if (beforeIndex == -1) {
-        errback("Cannot find item"); // TODO: better error
+        errback && errback("Cannot find item"); // TODO: better error
         return;
     }
 
@@ -4032,21 +4439,31 @@ links.DataTable.prototype.moveItems = function (items, beforeItem, callback, err
             indexes[i] = index;
         }
         else {
-            errback("Cannot find item"); // TODO: better error
+            errback && errback("Cannot find item"); // TODO: better error
             return;
         }
     }
 
-    // if all items are found, move them
-    for (var i = 0; i < num; i++) {
-        this.data.splice(indexes[i], 1);
-        this.data.splice(beforeIndex, 0, items[i]);
+    // order the indexes in ascending order
+    indexes.sort(function (a, b) {
+        return a > b ? 1 : a < b ? -1 : 0;
+    });
+
+    // if all items are found, move them from the last to the first (else we alter the indexes)
+    var offset = 0;
+    for (var i = num - 1; i >= 0; i--) {
+        var index = indexes[i];
+        if (index < beforeIndex) {
+            offset++;
+        }
+        this.data.splice(index, 1);
     }
+    this.data.splice.apply(this.data, [beforeIndex - offset, 0].concat(items));
 
-    // perform filtering and sorting again if there is a filter set
-    this.updateFilters();
+    // perform filtering and sorting again
+    this._applySortingAndFilters();
 
-    callback({
+    callback && callback({
         'totalItems': this.filteredData.length,
         'items': items
     });
@@ -4074,15 +4491,15 @@ links.DataTable.prototype.removeItems = function (items, callback, errback) {
             this.data.splice(index, 1);
         }
         else {
-            errback("Cannot find item"); // TODO: better error
+            errback && errback("Cannot find item"); // TODO: better error
             return;
         }
     }
 
-    // perform filtering and sorting again if there is a filter set
-    this.updateFilters();
+    // perform filtering and sorting again
+    this._applySortingAndFilters();
 
-    callback({
+    callback && callback({
         'totalItems': this.filteredData.length,
         'items': items
     });
@@ -4116,7 +4533,7 @@ links.DataTable.prototype.getChanges = function (index, num, items, callback, er
         }
     }
 
-    callback({
+    callback && callback({
         'totalItems': this.filteredData.length,
         'items': changedItems
     });
@@ -4126,7 +4543,7 @@ links.DataTable.prototype.getChanges = function (index, num, items, callback, er
  * Force the DataTable to be changed by incrementing the update sequence
  */
 links.DataTable.prototype.update = function () {
-    this.updateFilters();
+    this._applySortingAndFilters();
 
     this.trigger('change', undefined);
 };
@@ -4141,101 +4558,130 @@ links.DataTable.prototype.onEvent = function (event, params) {
 };
 
 /**
- * Update the filters (if any).
- * This method is executed after the data has been changed.
- */
-links.DataTable.prototype.updateFilters = function () {
-    if (this.filters) {
-        this.setFilters(this.filters);
-    }
-    else {
-        this.filteredData = this.data;
-    }
-};
-
-/**
  * Set a filter for this DataTable
  * @param {Object[]} filters An array containing filter objects.
- *                                     a filter object contains parameters
- *                                     field, value, startValue, endValue,
- *                                     values, order
+ *                                     a filter object can contain parameters
+ *                                     `field`, `value`, `startValue`, `endValue`,
+ *                                     `values`.
  */
-// TODO: comment
-links.DataTable.prototype.setFilters = function (filters) {
-    var data = this.data;
-    var filteredData = [];
-    this.filteredData = filteredData;
+links.DataTable.prototype.setFiltering = function (filters) {
     this.filters = filters;
+    this._applySortingAndFilters();
+    this.trigger('change', undefined);
+}
 
+/**
+ * Returns the current filtering array, returns undefined if there is no sorting defined.
+ * @return {Object[] | undefined}
+ */
+links.DataTable.prototype.getFiltering = function () {
+    return this.sorting;
+}
+
+/**
+ * Set sorting for this DataTable. Can sort one or multiple columns
+ * @param {Array.<{field: string, order: string}>} filters
+ *                             An array containing sorting objects.
+ *                             a sorting object contains parameters
+ *                             `field`, `order`. Order can be `asc`, `desc`, or null.
+ */
+links.DataTable.prototype.setSorting = function (sorting) {
+    this.sorting = sorting;
+    this._applySortingAndFilters();
+    this.trigger('change', undefined);
+}
+
+/**
+ * Returns the current sorting array, returns undefined if there is no sorting defined.
+ * @return {Array.<{field: string, order: string}> | undefined}
+ */
+links.DataTable.prototype.getSorting = function () {
+    return this.sorting;
+}
+
+/**
+ * Apply sorting and filtering (if set)
+ * This method is executed after the data has been changed.
+ * See also methods `setSorting` and `setFiltering`
+ */
+links.DataTable.prototype._applySortingAndFilters = function () {
     // filter the data
-    for (var i = 0, iMax = data.length; i < iMax; i++) {
-        var item = data[i];
-        var emit = true;
-        for (var f = 0, fMax = filters.length; f < fMax; f++) {
-            var filter = filters[f];
-            if (filter.field) {
-                var value = item[filter.field];
-                if (filter.value && (value != filter.value)) {
-                    emit = false;
-                }
-                if (filter.startValue && value < filter.startValue) {
-                    emit = false;
-                }
-                if (filter.endValue && value > filter.endValue) {
-                    emit = false;
-                }
-                if (filter.values && (filter.values.indexOf(value) == -1)) {
-                    emit = false;
+    if (this.filters) {
+        this.filteredData = [];
+        for (var i = 0, iMax = this.data.length; i < iMax; i++) {
+            var item = this.data[i];
+            var emit = true;
+            for (var f = 0, fMax = this.filters.length; f < fMax; f++) {
+                var filter = this.filters[f];
+                if (filter.field) {
+                    var value = item[filter.field];
+                    if (filter.value && (value != filter.value)) {
+                        emit = false;
+                    }
+                    if (filter.startValue && value < filter.startValue) {
+                        emit = false;
+                    }
+                    if (filter.endValue && value > filter.endValue) {
+                        emit = false;
+                    }
+                    if (filter.values && (filter.values.indexOf(value) == -1)) {
+                        emit = false;
+                    }
                 }
             }
-        }
 
-        if (emit) {
-            filteredData.push(item);
+            if (emit) {
+                this.filteredData.push(item);
+            }
         }
     }
-
-    // create a list with fields that need to be ordered
-    var orders = [];
-    for (var f = 0, fMax = filters.length; f < fMax; f++) {
-        var filter = filters[f];
-        if (filter.field && filter.order) {
-            var order = filter.order.toUpperCase();
-            if (order == 'ASC' || order == 'DESC') {
-                orders.push({
-                    'field': filter.field,
-                    'direction': ((order == 'ASC') ? 1 : -1)
-                });
-            }
-            else {
-                throw 'Unknown order "' + order + '". ' +
-                    'Available values: "ASC", "DESC".';
-            }
-        }
+    else {
+        this.filteredData = this.data.slice(0);
     }
 
     // order the filtered data
-    var ordersLength = orders.length;
-    if (ordersLength) {
-        filteredData.sort(function (a, b) {
-            for (var i = 0; i < ordersLength; i++) {
-                var order = orders[i],
-                    field = order.field,
-                    direction = order.direction;
-
-                if (a[field] == b[field]) {
-                    if (i == ordersLength - 1) {
-                        return 0;
-                    }
-                    else {
-                        // compare with the next filter
-                    }
+    if (this.sorting) {
+        // create a list with fields that need to be ordered
+        var orders = [];
+        for (var f = 0, fMax = this.sorting.length; f < fMax; f++) {
+            var entry = this.sorting[f];
+            if (entry.field && entry.order) {
+                var order = entry.order.toLowerCase();
+                if (order == 'asc' || order == 'desc') {
+                    orders.push({
+                        'field': entry.field,
+                        'direction': ((order == 'asc') ? 1 : -1)
+                    });
                 }
                 else {
-                    return (a[field] > b[field]) ? direction : -direction;
+                    throw 'Unknown order "' + order + '". ' +
+                        'Available values: "asc", "desc".';
                 }
             }
-        });
+        }
+
+        var len = orders.length;
+        if (len > 0) {
+            this.filteredData.sort(function (a, b) {
+                for (var i = 0; i < len; i++) {
+                    var order = orders[i];
+                    var field = order.field;
+                    var direction = order.direction;
+
+                    if (a[field] == b[field]) {
+                        if (i == len - 1) {
+                            return 0;
+                        }
+                        else {
+                            // compare with the next filter
+                        }
+                    }
+                    else {
+                        return (a[field] > b[field]) ? direction : -direction;
+                    }
+                }
+            });
+        }
     }
 };
 
@@ -4439,14 +4885,30 @@ links.CouchConnector.prototype.getChanges = function (index, num, items,
  * Set a filter for this DataTable
  * @param {Object[]} filters An array containing filter objects.
  *                                     a filter object contains parameters
- *                                     field, value, startValue, endValue, order
+ *                                     field, value, startValue, endValue
  */
-links.CouchConnector.prototype.setFilters = function (filters) {
+links.CouchConnector.prototype.setFiltering = function (filters) {
     if (filters.length > 1) {
         throw "CouchConnector can currently only handle one filter";
     }
     else if (filters.length > 0) {
         this.filter = filters[0];
+    }
+
+    // TODO: invalidate currently retrieved data
+};
+
+/**
+ * Set a filter for this DataTable
+ * @param {Object[]} sorting  An array containing one or multipel objects.
+ *                            contains parameters `field`, `order`
+ */
+links.CouchConnector.prototype.setSorting = function (sorting) {
+    if (filters.length > 1) {
+        throw "CouchConnector can currently only handle one order";
+    }
+    else if (sorting.length > 0) {
+        this.sorting = sorting[0];
     }
 
     // TODO: invalidate currently retrieved data
@@ -4543,6 +5005,8 @@ links.TreeGrid.Frame.prototype.onDragStart = function(event) {
         }
     }
 
+    event.dragSource = parent;  // TODO: this does not work when there are multiple parents in a multi selection
+
     if (items.length > 0) {
         var dragImage = this.dom.dragImage;
         if (dragImage) {
@@ -4551,6 +5015,7 @@ links.TreeGrid.Frame.prototype.onDragStart = function(event) {
         }
 
         event.dataTransfer.setData('items', items);
+        event.dataTransfer.setData('srcFrame', this);
         return true;
     }
     else {
@@ -4563,7 +5028,8 @@ links.TreeGrid.Frame.prototype.onDragStart = function(event) {
  */
 links.TreeGrid.Frame.prototype.onDragEnd = function(event) {
     var dropEffect = event.dataTransfer.dropEffect;
-    if (dropEffect == 'move') {
+    if (dropEffect == 'move' && !event.dataTransfer.sameDataConnector) {
+        // note: in case of sameDataConnector, the event is already handled by onDrop() as a moveItems event.
         var frame = this;
         var items = event.dataTransfer.getData('items');
         var callbacksInProgress = items.length;
@@ -4623,7 +5089,7 @@ links.TreeGrid.Frame.prototype.onMouseDown = function(event) {
     var target = links.TreeGrid.getTarget(event);
 
     if (target.treeGridType && target.treeGridType == 'expand') {
-        target.grid.onExpand();
+        target.grid.toggleExpand();
         links.TreeGrid.stopPropagation(event); // TODO: does not work
     }
     else if (target.treeGridType && target.treeGridType == 'action') {
@@ -4647,6 +5113,41 @@ links.TreeGrid.Frame.prototype.onMouseDown = function(event) {
 };
 
 /**
+ * Hover over an item
+ * @param {event} event
+ */
+links.TreeGrid.Frame.prototype.onMouseOver = function (event) {
+    event = event || window.event;
+
+    // check whether hovering an item
+    var item = links.TreeGrid.getItemFromTarget(event.target);
+    //console.log('enter', event, item)
+
+    if (this.hoveredItem !== item) {
+        if (this.hoveredItem) {
+            this.trigger('leave', {item: this.hoveredItem.data});
+        }
+
+        if (item) {
+            this.trigger('enter', {item: item.data});
+        }
+
+        this.hoveredItem = item || null;
+    }
+};
+
+/**
+ * Leave the frame
+ * @param {event} event
+ */
+links.TreeGrid.Frame.prototype.onMouseLeave = function (event) {
+    if (this.hoveredItem) {
+        this.trigger('leave', {item: this.hoveredItem.data});
+    }
+    this.hoveredItem = null;
+};
+
+/**
  * Set given node selected
  * @param {links.TreeGrid.Node} node
  * @param {Boolean} keepSelection  If true, the current node is added to the
@@ -4658,7 +5159,7 @@ links.TreeGrid.Frame.prototype.select = function(node, keepSelection, selectRang
     var triggerEvent = false;
 
     if (selectRange) {
-        var startNode = this.selection.pop();
+        var startNode = this.selection.shift();
         var endNode = node;
 
         // ensure having nodes in the same grid
@@ -4687,7 +5188,7 @@ links.TreeGrid.Frame.prototype.select = function(node, keepSelection, selectRang
                 var node = parent.items[index];
                 node.select();
                 node.repaint();
-                this.selection.unshift(node);
+                this.selection.push(node);
                 index++;
             }
         }
@@ -4698,10 +5199,10 @@ links.TreeGrid.Frame.prototype.select = function(node, keepSelection, selectRang
                 node.select();
                 node.repaint();
 
-                // important to add to the beginning of the array, we want to keep
-                // our 'start' node at the end of the selection array, needed when
+                // important to add to the end of the array, we want to keep
+                // our 'start' node at the start of the selection array, needed when
                 // we adjust this range.
-                this.selection.unshift(node);
+                this.selection.push(node);
                 index--;
             }
         }
@@ -4738,7 +5239,7 @@ links.TreeGrid.Frame.prototype.select = function(node, keepSelection, selectRang
 
     // trigger selection event
     this.trigger('select', {
-        //'index': node.index, // TOOD: cleanup
+        //'index': node.index, // TODO: cleanup
         'items': this.getSelection()
     });
 };
@@ -4770,7 +5271,7 @@ links.TreeGrid.Frame.prototype.unselect = function(triggerEvent) {
 
 /**
  * Get the selected items
- * @param {Object[]} selected items
+ * @return {Array[]} selected items
  */
 links.TreeGrid.Frame.prototype.getSelection = function() {
     // create an array with the data of the selected items (instead of the items 
@@ -4782,6 +5283,28 @@ links.TreeGrid.Frame.prototype.getSelection = function() {
     }
 
     return selectedData;
+};
+
+/**
+ * Set the selected items
+ * @param {Array[] | Object} items   a single item or array with items
+ */
+links.TreeGrid.Frame.prototype.setSelection = function(items) {
+    this.unselect();
+
+    if (!items) {
+        items = [];
+    }
+    else if (!links.TreeGrid.isArray(items)) {
+        items = [items];
+    }
+
+    var keepSelection = true;
+    for (var i = 0; i < items.length; i++) {
+        var itemData = items[i];
+        var item = this.findItem(itemData);
+        item && this.select(item, keepSelection);
+    }
 };
 
 /**
@@ -5050,28 +5573,11 @@ links.TreeGrid.prototype.trigger = function (event, params) {
  *     }
  *   });
  *
- *
- * @license
- * Licensed under the Apache License, Version 2.0 (the "License"); you may not
- * use this file except in compliance with the License. You may obtain a copy
- * of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
- * License for the specific language governing permissions and limitations under
- * the License.
- *
- * Copyright (c) 2011-2012 Almende B.V. <http://www.almende.com>
- *
- * @author Jos de Jong <jos@almende.org>
- * @date   2012-02-09
  */
 links.dnd = function () {
     var dragAreas = [];              // all registered drag areas
     var dropAreas = [];              // all registered drop areas
+    var _currentDropArea = null;     // holds the currently hovered dropArea
 
     var dragArea = undefined;        // currently dragged area
     var dragImage = undefined;
@@ -5301,63 +5807,18 @@ links.dnd = function () {
         dragEvent.clientX = event.clientX;
         dragEvent.clientY = event.clientY;
 
-        // find center of the drag area
-        var left = (event.clientX - dragImageOffsetX);
-        var top = (event.clientY - dragImageOffsetY);
-        var width = dragImage.clientWidth || dragArea.element.clientWidth;
-        var height = dragImage.clientHeight || dragArea.element.clientHeight;
-        var x = left + width / 2;
-        var y = top + height / 2;
-        // console.log(dragImageOffsetX, x, left, width, dragImageOffsetY, y, top, height)
-
-        // check if there is a droparea overlapping with current dragarea
-        var currentDropArea = undefined;
-        for (var i = 0; i < dropAreas.length; i++) {
-            var dropArea = dropAreas[i];
-            var left = getAbsoluteLeft(dropArea.element);
-            var top = getAbsoluteTop(dropArea.element);
-            var width = dropArea.element.clientWidth;
-            var height = dropArea.element.clientHeight;
-
-            if (x > left && x < left + width && y > top && y < top + height &&
-                !currentDropArea &&
-                getAllowedDropEffect(dragArea.effectAllowed, dropArea.dropEffect)) {
-                // on droparea
-                currentDropArea = dropArea;
-
-                if (!dropArea.mouseOver) {
-                    if (dropArea.dragEnter) {
-                        dragEvent.dataTransfer.dropArea = dropArea;
-                        dragEvent.dataTransfer.dropEffect = undefined;
-                        dropArea.dragEnter(dragEvent);
-                    }
-                    dropArea.mouseOver = true;
-                }
-            }
-            else {
-                // not on droparea
-                if (dropArea.mouseOver) {
-                    if (dropArea.dragLeave) {
-                        dragEvent.dataTransfer.dropArea = dropArea;
-                        dragEvent.dataTransfer.dropEffect = undefined;
-                        dropArea.dragLeave(dragEvent);
-                    }
-                    dropArea.mouseOver = false;
-                }
-            }
-        }
-
-        // adjust event properties
+        // find the current dropArea
+        var currentDropArea = findDropArea(event);
         if (currentDropArea) {
+            // adjust event properties
             dragEvent.dataTransfer.dropArea = currentDropArea.element;
-            dragEvent.dataTransfer.dropEffect =
-                getAllowedDropEffect(dragArea.effectAllowed, currentDropArea.dropEffect);
+            dragEvent.dataTransfer.dropEffect = getAllowedDropEffect(dragArea.effectAllowed, currentDropArea.dropEffect);
 
             if (currentDropArea.dragOver) {
                 currentDropArea.dragOver(dragEvent);
 
                 // TODO
-                // // dropEffecct may be changed during dragOver
+                // // dropEffect may be changed during dragOver
                 //currentDropArea.dropEffect = dragEvent.dataTransfer.dropEffect;
             }
         }
@@ -5388,29 +5849,12 @@ links.dnd = function () {
         document.body.style.cursor = originalCursor || '';
         originalCursor = undefined;
 
-        var currentDropArea = undefined;
-        for (var i = 0; i < dropAreas.length; i++) {
-            var dropArea = dropAreas[i];
-
-            // perform mouse leave event
-            if (dropArea.mouseOver) {
-                if (dropArea.dragLeave) {
-                    dropArea.dragLeave(dragEvent);
-                }
-                dropArea.mouseOver = false;
-
-                // perform drop event
-                if (!currentDropArea) {
-                    currentDropArea = dropArea;
-                }
-            }
-        }
-
+        // find the current dropArea
+        var currentDropArea = findDropArea(event);
         if (currentDropArea) {
             // adjust event properties
             dragEvent.dataTransfer.dropArea = currentDropArea.element;
-            dragEvent.dataTransfer.dropEffect =
-                getAllowedDropEffect(dragArea.effectAllowed, currentDropArea.dropEffect);
+            dragEvent.dataTransfer.dropEffect = getAllowedDropEffect(dragArea.effectAllowed, currentDropArea.dropEffect);
 
             // trigger drop event
             if (dragEvent.dataTransfer.dropEffect) {
@@ -5459,6 +5903,146 @@ links.dnd = function () {
         }
 
         return undefined;
+    }
+
+    /**
+     * Find the current droparea, and call dragEnter() and dragLeave() on change of droparea.
+     * The found droparea is returned and also stored in the variable _currentDropArea
+     * @param {Event} event
+     * @return {Object| null} Returns the dropArea if found, or else null
+     */
+    function findDropArea (event) {
+        // TODO: dnd prototype should not have knowledge about TreeGrid.Item and dataConnectors, this is a hack
+        var newDropArea = null;
+
+        // get the hovered Item (if any)
+        var item = null;
+        var elem = event.target || event.srcElement;
+        while (elem) {
+            if (elem.item instanceof links.TreeGrid.Item) {
+                item = elem.item;
+                break;
+            }
+            elem = elem.parentNode;
+        }
+
+        // check if there is a droparea overlapping with current dragarea
+        if (item) {
+            for (var i = 0; i < dropAreas.length; i++) {
+                var dropArea = dropAreas[i];
+
+                if ((item.dom.frame == dropArea.element) && !newDropArea &&
+                    getAllowedDropEffect(dragArea.effectAllowed, dropArea.dropEffect)) {
+                    // on droparea
+                    newDropArea = dropArea;
+                }
+            }
+        }
+
+        // see if there is a parent with droparea
+        if (!newDropArea) {
+            var parent = item && item.parent;
+            if (!parent) {
+                // header
+                var header = findAttribute(event.target || event.srcElement, 'header');
+                parent = header && header.parent;
+            }
+            if (!parent) {
+                // root
+                var frame = findAttribute(event.target || event.srcElement, 'frame');
+                parent = frame && frame.grid;
+            }
+
+            if (parent && parent.dataConnector &&
+                !newDropArea &&
+                getAllowedDropEffect(parent.dataConnector.options.dataTransfer.effectAllowed,
+                    parent.dataConnector.options.dataTransfer.dropEffect)) {
+
+                // Fake a dropArea (yes, this is a terrible hack)
+                var element = event.target || event.srcElement;
+                if (_currentDropArea && _currentDropArea.element === element) {
+                    // fake dropArea already exists
+                    newDropArea = _currentDropArea;
+                }
+                else {
+                    // create a new fake dropArea
+                    var dashedLine = document.createElement('div');
+                    dashedLine.className = 'treegrid-droparea after';
+
+                    newDropArea = {
+                        element: element,
+                        dropEffect: parent.dataConnector.options.dataTransfer.dropEffect,
+                        dragEnter: function (event) {
+                            if (item) {
+                                item.dom.frame.appendChild(dashedLine);
+                            }
+                            else if (header) {
+                                dashedLine.style.bottom = '-5px';
+                                header.dom.header.appendChild(dashedLine);
+                            }
+                            else if (frame) {
+                                dashedLine.style.top = frame.gridHeight + 'px';
+                                dashedLine.style.bottom = '';
+                                frame.dom.mainFrame.appendChild(dashedLine);
+                            }
+                        },
+                        dragLeave: function (event) {
+                            dashedLine.parentNode && dashedLine.parentNode.removeChild(dashedLine);
+                        },
+                        dragOver: function (event) {
+                            // nothing to do
+                        },
+                        drop: function (event) {
+                            newDropArea.dragLeave(event);
+                            event.dropTarget = item || header || frame;
+                            parent.onDrop(event);
+                        }
+                    };
+                }
+            }
+        }
+
+        // leave current dropArea
+        if (_currentDropArea !== newDropArea) {
+            if (_currentDropArea) {
+                if (_currentDropArea.dragLeave) {
+                    dragEvent.dataTransfer.dropArea = _currentDropArea;
+                    dragEvent.dataTransfer.dropEffect = undefined;
+                    _currentDropArea.dragLeave(dragEvent);
+                }
+                _currentDropArea.mouseOver = false;
+            }
+
+            if (newDropArea) {
+                if (newDropArea.dragEnter) {
+                    dragEvent.dataTransfer.dropArea = newDropArea;
+                    dragEvent.dataTransfer.dropEffect = undefined;
+                    newDropArea.dragEnter(dragEvent);
+                }
+                newDropArea.mouseOver = true;
+            }
+
+            _currentDropArea = newDropArea;
+        }
+
+        return _currentDropArea;
+    }
+
+    /**
+     * Find an attribute in the parent tree of given element
+     * @param {EventTarget} elem
+     * @param {string} attribute
+     * @returns {* | null}
+     */
+    function findAttribute(elem, attribute) {
+        while (elem) {
+            if (elem[attribute]) {
+                return elem[attribute];
+            }
+
+            elem = elem.parentNode;
+        }
+        return null;
     }
 
     /**
@@ -5837,3 +6421,4 @@ links.TreeGrid.preventDefault = function (event) {
         event.returnValue = false;  // IE browsers
     }
 };
+

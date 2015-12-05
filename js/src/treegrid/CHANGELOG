@@ -2,6 +2,65 @@ CHAP Links Library - TREEGRID
 http://almende.github.com/chap-links-library/
 
 
+not yet released, version 1.8.1
+
+- Allow dynamic updating of the column widths.
+
+
+2015-11-20, version 1.8.0
+
+- Implemented css styles `.treegrid-item-even` and `.treegrid-item-odd`,
+  which all items have alternately. Can be used to create CSS zebra stripes.
+- Implemented css styles `.treegrid-level-0`, `.treegrid-level-1`,
+  `.treegrid-level-2`, etc. denoting how many levels deep an item is nested.
+
+
+2015-10-15, version 1.7.0
+
+- Implemented support for sorting. DataConnectors now have new methods
+  `setSorting` and `getSorting`, and columns can be configured to be
+  `sortable`.
+
+
+2015-08-17, version 1.6.2
+
+- Fixed dragging items being broken due to the fix of v1.6.1.
+- Fixed column left positions being set to zero after replacing all items
+  when columns had a fixed width provided.
+
+
+2015-07-27, version 1.6.1
+
+- Fixed a bug sometimes calculating the wrong top position of items.
+
+
+2015-04-08, version 1.6.0
+
+- Actions can now have an additional field `id`.
+
+
+2015-04-07, version 1.5.0
+
+- Implemented selective drag and drop: the DataConnector where the items
+  are dropped can accept a selection of the dropped items, and send back
+  only the accepted items.
+
+2015-02-23, version 1.4.0
+
+- Implemented methods `getSelection()`, `setSelection(items)`,
+  `expand(items)`, and `collapse(items)` on the TreeGrid.
+- Implemented events `enter` and `leave`, fired when the mouse is hovered
+  over an item in the TreeGrid.
+
+
+2015-02-09, version 1.3.0
+
+- implemented support for moving items, added DataConnector functions
+  `moveItems` and `insertItemsBefore`.
+- implemented support for updating items in a DataConnector using `updateItems`.
+- implemented method `setActions` to set action icons in a grids header.
+
+
 2012-07-03, version 1.2.0
 
 - implemented method linkItems. Items can be linked to each other via drag and,

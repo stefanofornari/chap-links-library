@@ -355,7 +355,7 @@ var data = [
     </li>
 
     <li>
-        <b>Actions</b>
+        <b id="Actions">Actions</b>
         <p>
             Each item can contain a field <code>_actions</code>, containing an array
             with one or multiple actions. Actions are displayed as a button or
@@ -382,6 +382,20 @@ var data = [
             </tr>
 
             <tr>
+                <td>height</td>
+                <td>String</td>
+                <td>no</td>
+                <td>The height of the action icon or text, for example '32px'.</td>
+            </tr>
+
+            <tr>
+                <td>id</td>
+                <td>*</td>
+                <td>no</td>
+                <td>An id for the action.</td>
+            </tr>
+
+            <tr>
                 <td>image</td>
                 <td>String</td>
                 <td>no</td>
@@ -404,6 +418,13 @@ var data = [
                 <td>no</td>
                 <td>When the mouse is hovered over an action, the title will be displayed.
                     The title can contain an explanation of the action.</td>
+            </tr>
+
+            <tr>
+                <td>width</td>
+                <td>String</td>
+                <td>no</td>
+                <td>The width of the action icon or text, for example '32px'.</td>
             </tr>
 
         </table>
@@ -581,11 +602,32 @@ var options = {
     </tr>
 
     <tr>
+        <td>collapse(items)</td>
+        <td>none</td>
+        <td>Collapse one or multiple items. Items can be retrieved from a DataConnector using <code>getItems()</code>.
+        </td>
+    </tr>
+
+    <tr>
         <td>draw(data, options)</td>
         <td>none</td>
         <td>Loads data, sets options, and draws the TreeGrid.
             <code>data</code> is a JSON Array or DataTable.
             <code>options</code> is an (optional) JSON Object containing values for options.
+        </td>
+    </tr>
+
+    <tr>
+        <td>expand(items)</td>
+        <td>none</td>
+        <td>Expand one or multiple items. Items can be retrieved from a DataConnector using <code>getItems()</code>.
+        </td>
+    </tr>
+
+    <tr>
+        <td>getSelection()</td>
+        <td>Array</td>
+        <td>Retrieve the selected items.
         </td>
     </tr>
 
@@ -597,6 +639,14 @@ var options = {
             this method can be used to force a redraw of the TreeGrid.
         </td>
     </tr>
+
+    <tr>
+        <td>setSelection(items)</td>
+        <td>none</td>
+        <td>Replace the current selection. Parameter <code>items</code> can be a single item or an array with multiple items. Items can be retrieved from a DataConnector using <code>getItems()</code>.
+        </td>
+    </tr>
+
 </table>
 
 <h2><a name="Events" id="Events"></a>Events</h2>
@@ -627,9 +677,11 @@ google.visualization.events.addListener(mytreegrid, 'select', onselect);
 </p>
 
 <table>
-    <col width="10%">
-    <col width="60%">
-    <col width="30%">
+    <colgroup>
+        <col width="10%">
+        <col width="60%">
+        <col width="30%">
+    </colgroup>
 
     <tr>
         <th>name</th>
@@ -650,6 +702,16 @@ google.visualization.events.addListener(mytreegrid, 'select', onselect);
     </tr>
 
     <tr>
+        <td>enter</td>
+        <td>Fired when the mouse hovers over an item. See also <code>leave</code>.</td>
+        <td>
+            <ul>
+                <li><code>item</code>: Object. The data of the currently hovered item.</li>
+            </ul>
+        </td>
+    </tr>
+
+    <tr>
         <td>expand</td>
         <td>Expand an item. This is only possible when the item contains
             nested data. This data will be displayed as a subgrid below the item.
@@ -658,6 +720,16 @@ google.visualization.events.addListener(mytreegrid, 'select', onselect);
             <ul>
                 <li><code>items</code>: Array with Objects. This array will contain
                     one item: the expanded item.</li>
+            </ul>
+        </td>
+    </tr>
+
+    <tr>
+        <td>leave</td>
+        <td>Fired when the mouse leaves an item. See also <code>enter</code>.</td>
+        <td>
+            <ul>
+                <li><code>item</code>: Object. The data of the left item.</li>
             </ul>
         </td>
     </tr>
@@ -736,9 +808,11 @@ google.visualization.events.addListener(mytreegrid, 'select', onselect);
 </pre>
 
 <table>
-<col width="25%">
-<col width="50%">
-<col width="25%">
+    <colgroup>
+        <col width="25%">
+        <col width="50%">
+        <col width="25%">
+    </colgroup>
 
 <tr>
     <th>Class name</th>
@@ -784,11 +858,35 @@ google.visualization.events.addListener(mytreegrid, 'select', onselect);
 </tr>
 
 <tr>
-    <td>.treegrid-item</td>
+    <td>.treegrid-item-selected</td>
     <td>A selected item.</td>
     <td>
         background-color: #FFFF80;<br>
         border-color: #FFD500;<br>
+    </td>
+</tr>
+
+<tr>
+    <td>
+        .treegrid-item-even<br>
+        .treegrid-item-odd
+    </td>
+    <td>All items have alternately a style <code>treegrid-item-even</code> or <code>treegrid-item-odd</code>, which can be used to create CSS zebra stripes.</td>
+    <td>
+        (none)
+    </td>
+</tr>
+
+<tr>
+    <td>
+        .treegrid-level-0<br>
+        .treegrid-level-1<br>
+        .treegrid-level-2<br>
+        ...
+    </td>
+    <td>All items have this style denoting how many levels deep they are nested.</td>
+    <td>
+        (none)
     </td>
 </tr>
 
